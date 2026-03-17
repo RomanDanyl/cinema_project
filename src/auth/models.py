@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import String, DateTime, func
+from sqlalchemy import String, DateTime, func, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
+from src.security.utils import generate_secure_token
 from src.models import validators
 from src.security.passwords import hash_password, verify_password
 from src.models.base import Base
@@ -61,3 +62,20 @@ class UserModel(Base):
     @validates("email")
     def validate_email(self, key, value) -> str:
         return validators.validate_email(value.lower())
+
+
+class TokenBaseModel(Base):
+    __abstract__ = True
+
+    token: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, default=generate_secure_token
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc) + timedelta(days=1),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
