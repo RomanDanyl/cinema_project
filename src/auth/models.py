@@ -30,6 +30,11 @@ class UserModel(Base):
         "ActivationTokenModel", back_populates="user", cascade="all, delete-orphan"
     )
 
+    def __repr__(self) -> str:
+        return (
+            f"<UserModel(id={self.id}, email={self.email}, is_active={self.is_active})>"
+        )
+
     @classmethod
     def create(
             cls, email: str, raw_password: str,
@@ -95,5 +100,5 @@ class ActivationTokenModel(TokenBaseModel):
 
     __table_args__ = (UniqueConstraint("user_id"),)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<ActivationTokenModel(id={self.id}, token={self.token}, expires_at={self.expires_at})>"
