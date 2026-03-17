@@ -1,7 +1,8 @@
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
-from sqlalchemy import String, DateTime, func, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, validates
+from sqlalchemy import String, DateTime, func, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, validates, relationship
 
 from src.security.utils import generate_secure_token
 from src.models import validators
@@ -23,6 +24,10 @@ class UserModel(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+    activation_token: Mapped[Optional["ActivationTokenModel"]] = relationship(
+        "ActivationTokenModel", back_populates="user", cascade="all, delete-orphan"
     )
 
     @classmethod
@@ -79,3 +84,16 @@ class TokenBaseModel(Base):
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
+
+
+class ActivationTokenModel(TokenBaseModel):
+    __tablename__ = "activation_tokens"
+
+    user: Mapped[UserModel] = relationship(
+        "UserModel", back_populates="activation_token"
+    )
+
+    __table_args__ = (UniqueConstraint("user_id"),)
+
+    def __repr__(self):
+        return f"<ActivationTokenModel(id={self.id}, token={self.token}, expires_at={self.expires_at})>"
