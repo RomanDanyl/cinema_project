@@ -3,8 +3,8 @@ from datetime import datetime
 from sqlalchemy import String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, validates
 
-from models import validators
-from security.passwords import hash_password, verify_password
+from src.models import validators
+from src.security.passwords import hash_password, verify_password
 from src.models.base import Base
 
 
