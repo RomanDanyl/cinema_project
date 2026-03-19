@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models import UserModel
+from src.models import UserModel, ActivationTokenModel
 from src.database import get_db
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema
 
@@ -55,6 +55,11 @@ async def register_user(
             raw_password=user_data.password,
         )
         db.add(new_user)
+        await db.flush()
+
+        activation_token = ActivationTokenModel(user_id=new_user.id)
+        db.add(activation_token)
+
         await db.commit()
         await db.refresh(new_user)
     except SQLAlchemyError as e:
