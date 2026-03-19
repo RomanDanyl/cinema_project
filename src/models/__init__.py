@@ -1,1 +1,1 @@
-from src.auth.models import UserModel
+from src.auth.models import UserModel, ActivationTokenModel
