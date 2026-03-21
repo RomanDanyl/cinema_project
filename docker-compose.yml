@@ -16,6 +16,15 @@ services:
       timeout: 5s
       retries: 5
 
+  mailhog:
+    image: mailhog/mailhog
+    container_name: cinema_mailhog
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    networks:
+      - cinema_net
+
 volumes:
   postgres_data:
 
