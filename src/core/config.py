@@ -38,4 +38,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env.local")
 
 
-settings = Settings()
+class TestingSettings(Settings):
+    PATH_TO_DB: str = "test.db" # ":memory:"
+
+    @property
+    def database_url_async(self) -> str:
+        return f"sqlite+aiosqlite:///{self.PATH_TO_DB}"
+
+    model_config = SettingsConfigDict(env_file=None)
