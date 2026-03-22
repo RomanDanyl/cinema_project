@@ -5,9 +5,9 @@ from sqlalchemy import String, DateTime, func, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, validates, relationship
 
 from src.security.utils import generate_secure_token
-from src.models import validators
+from src.database.models import validators
 from src.security.passwords import hash_password, verify_password
-from src.models.base import Base
+from src.database.models.base import Base
 
 
 class UserModel(Base):

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.exceptions import BaseEmailError
 from src.core.dependencies import get_accounts_email_notificator
 from src.notifications.interfaces import EmailSenderInterface
-from src.models import UserModel, ActivationTokenModel
+from src.database.models import UserModel, ActivationTokenModel
 from src.database import get_db
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema
 
