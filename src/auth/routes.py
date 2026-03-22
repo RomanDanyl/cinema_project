@@ -3,6 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.exceptions import BaseEmailError
+from src.core.dependencies import get_accounts_email_notificator
+from src.notifications.interfaces import EmailSenderInterface
 from src.models import UserModel, ActivationTokenModel
 from src.database import get_db
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema
@@ -38,8 +41,9 @@ router = APIRouter(prefix="/accounts")
     },
 )
 async def register_user(
-        user_data: UserRegistrationRequestSchema,
-        db: AsyncSession = Depends(get_db)
+    user_data: UserRegistrationRequestSchema,
+    db: AsyncSession = Depends(get_db),
+    email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator),
 ) -> UserRegistrationResponseSchema:
     stmt = select(UserModel).where(UserModel.email == user_data.email)
     result = await db.execute(stmt)
@@ -59,14 +63,28 @@ async def register_user(
 
         activation_token = ActivationTokenModel(user_id=new_user.id)
         db.add(activation_token)
+        await db.flush()
+
+        activation_link = (
+            "http://127.0.0.1/api/v1/accounts/activate/"
+            f"?token={activation_token.token}"
+        )
+
+        await email_sender.send_activation_email(new_user.email, activation_link)
 
         await db.commit()
         await db.refresh(new_user)
-    except SQLAlchemyError as e:
+
+    except (SQLAlchemyError, BaseEmailError) as e:
         await db.rollback()
+
+        detail = "An error occurred during registration. Please try again later."
+        if isinstance(e, BaseEmailError):
+            detail = "Could not send activation email. Registration cancelled."
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during user creation.",
-        ) from e
-    else:
-        return UserRegistrationResponseSchema.model_validate(new_user)
+            detail=detail
+        )
+
+    return UserRegistrationResponseSchema.model_validate(new_user)
