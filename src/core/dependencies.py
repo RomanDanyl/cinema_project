@@ -1,11 +1,16 @@
+import os
+
 from fastapi import Depends
 
 from src.notifications.interfaces import EmailSenderInterface
 from src.notifications.emails import EmailSender
-from src.core.config import Settings
+from src.core.config import Settings, TestingSettings
 
 
 def get_settings() -> Settings:
+    environment = os.getenv("ENVIRONMENT", "developing")
+    if environment == "testing":
+        return TestingSettings()
     return Settings()
 
 
