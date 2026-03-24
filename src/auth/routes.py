@@ -78,7 +78,7 @@ async def register_user(
     except (SQLAlchemyError, BaseEmailError) as e:
         await db.rollback()
 
-        detail = "An error occurred during registration. Please try again later."
+        detail = "An error occurred during user creation."
         if isinstance(e, BaseEmailError):
             detail = "Could not send activation email. Registration cancelled."
 
