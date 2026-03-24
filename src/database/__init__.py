@@ -1,5 +1,7 @@
 import os
 
+from src.database.session_sqlite3 import reset_sqlite_database as reset_database
+
 environment = os.getenv("ENVIRONMENT", "developing")
 
 if environment == "testing":
