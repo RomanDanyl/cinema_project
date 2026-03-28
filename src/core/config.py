@@ -5,15 +5,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class BaseAppSettings(BaseSettings):
-    PATH_TO_DB: str = "test.db"  # ":memory:"
-
     BASE_DIR: Path = Path(__file__).parent.parent
+
+    PATH_TO_DB: Path = BASE_DIR / "test.db"  # ":memory:"
 
     PATH_TO_EMAIL_TEMPLATES_DIR: str = str(BASE_DIR / "notifications" / "templates")
     ACTIVATION_EMAIL_TEMPLATE_NAME: str = "activation_request.html"
 
-    EMAIL_HOST: str = "host"
-    EMAIL_PORT: int = 25
+    EMAIL_HOST: str = "127.0.0.1"
+    EMAIL_PORT: int = 1025
     EMAIL_HOST_USER: str = "testuser"
     EMAIL_HOST_PASSWORD: str = "test_password"
     EMAIL_USE_TLS: bool = False
