@@ -1,13 +1,11 @@
-from fastapi import APIRouter, status, Depends, HTTPException
+from fastapi import APIRouter, status, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exceptions import BaseEmailError
-from src.core.dependencies import get_accounts_email_notificator
-from src.notifications.interfaces import EmailSenderInterface
+from src.core.dependencies import EmailSenderDep
 from src.database.models import UserModel, ActivationTokenModel
-from src.database import get_db
+from src.database import SessionDep
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema
 
 router = APIRouter(prefix="/accounts")
@@ -42,8 +40,8 @@ router = APIRouter(prefix="/accounts")
 )
 async def register_user(
     user_data: UserRegistrationRequestSchema,
-    db: AsyncSession = Depends(get_db),
-    email_sender: EmailSenderInterface = Depends(get_accounts_email_notificator),
+    db: SessionDep,
+    email_sender: EmailSenderDep,
 ) -> UserRegistrationResponseSchema:
     stmt = select(UserModel).where(UserModel.email == user_data.email)
     result = await db.execute(stmt)

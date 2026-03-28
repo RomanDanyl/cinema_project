@@ -1,4 +1,5 @@
 import os
+from typing import Annotated
 
 from fastapi import Depends
 
@@ -7,7 +8,7 @@ from src.notifications.emails import EmailSender
 from src.core.config import Settings, TestingSettings, BaseAppSettings
 
 
-def get_settings() -> BaseAppSettings():
+def get_settings() -> BaseAppSettings:
     environment = os.getenv("ENVIRONMENT", "developing")
     if environment == "testing":
         return TestingSettings()
@@ -40,3 +41,6 @@ def get_accounts_email_notificator(
         template_dir=settings.PATH_TO_EMAIL_TEMPLATES_DIR,
         activation_email_template_name=settings.ACTIVATION_EMAIL_TEMPLATE_NAME,
     )
+
+
+EmailSenderDep = Annotated[EmailSenderInterface, Depends(get_accounts_email_notificator)]
