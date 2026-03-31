@@ -127,7 +127,7 @@ async def test_register_user_internal_server_error(client):
         "password": "StrongPassword123!"
     }
 
-    with patch("sqlalchemy.ext.asyncio.session.AsyncSession.commit", side_effect=SQLAlchemyError):
+    with patch("sqlalchemy.ext.asyncio.AsyncSession.begin", side_effect=SQLAlchemyError):
         response = await client.post("/api/v1/accounts/register/", json=payload)
 
         assert response.status_code == 500, "Expected status code 500 for internal server error."
