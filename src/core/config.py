@@ -46,9 +46,6 @@ class Settings(BaseAppSettings):
 
 class TestingSettings(BaseAppSettings):
 
-    def model_post_init(self, __context: dict[str, Any] | None = None) -> None:
-        object.__setattr__(self, "PATH_TO_DB", "test.db")
-
     @property
     def database_url_async(self) -> str:
         return f"sqlite+aiosqlite:///{self.PATH_TO_DB}"
