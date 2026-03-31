@@ -1,6 +1,5 @@
-from fastapi import APIRouter, status, HTTPException
-from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import APIRouter, status, HTTPException, BackgroundTasks
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 from src.exceptions import BaseEmailError
 from src.core.dependencies import EmailSenderDep, SettingsDep
@@ -42,46 +41,42 @@ async def register_user(
     user_data: UserRegistrationRequestSchema,
     db: SessionDep,
     email_sender: EmailSenderDep,
-    settings: SettingsDep
+    settings: SettingsDep,
+    background_tasks: BackgroundTasks
 ) -> UserRegistrationResponseSchema:
-    stmt = select(UserModel).where(UserModel.email == user_data.email)
-    result = await db.execute(stmt)
-    existing_user = result.scalars().first()
-    if existing_user:
+    try:
+        async with db.begin():
+            new_user = UserModel.create(
+                email=user_data.email,
+                raw_password=user_data.password,
+            )
+            db.add(new_user)
+            await db.flush()
+
+            activation_token = ActivationTokenModel(user_id=new_user.id)
+            db.add(activation_token)
+            await db.flush()
+
+            base = settings.BASE_URL.rstrip("/")
+            activation_link = f"{base}/api/v1/accounts/activate/?token={activation_token.token}"
+
+            background_tasks.add_task(
+                email_sender.send_activation_email,
+                new_user.email,
+                activation_link
+            )
+
+        await db.refresh(new_user)
+
+    except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A user with this email {user_data.email} already exists.",
         )
-    try:
-        new_user = UserModel.create(
-            email=user_data.email,
-            raw_password=user_data.password,
-        )
-        db.add(new_user)
-        await db.flush()
-
-        activation_token = ActivationTokenModel(user_id=new_user.id)
-        db.add(activation_token)
-        await db.flush()
-
-        base = settings.BASE_URL.rstrip("/")
-        activation_link = f"{base}/api/v1/accounts/activate/?token={activation_token.token}"
-
-        await email_sender.send_activation_email(new_user.email, activation_link)
-
-        await db.commit()
-        await db.refresh(new_user)
-
-    except (SQLAlchemyError, BaseEmailError) as e:
-        await db.rollback()
-
-        detail = "An error occurred during user creation."
-        if isinstance(e, BaseEmailError):
-            detail = "Could not send activation email. Registration cancelled."
-
+    except (SQLAlchemyError, BaseEmailError):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=detail
+            detail="An error occurred during user creation."
         )
 
     return UserRegistrationResponseSchema.model_validate(new_user)
