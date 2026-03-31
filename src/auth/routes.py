@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.exceptions import BaseEmailError
-from src.core.dependencies import EmailSenderDep
+from src.core.dependencies import EmailSenderDep, SettingsDep
 from src.database.models import UserModel, ActivationTokenModel
 from src.database import SessionDep
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema
@@ -42,6 +42,7 @@ async def register_user(
     user_data: UserRegistrationRequestSchema,
     db: SessionDep,
     email_sender: EmailSenderDep,
+    settings: SettingsDep
 ) -> UserRegistrationResponseSchema:
     stmt = select(UserModel).where(UserModel.email == user_data.email)
     result = await db.execute(stmt)
@@ -63,10 +64,8 @@ async def register_user(
         db.add(activation_token)
         await db.flush()
 
-        activation_link = (
-            "http://127.0.0.1/api/v1/accounts/activate/"
-            f"?token={activation_token.token}"
-        )
+        base = settings.BASE_URL.rstrip("/")
+        activation_link = f"{base}/api/v1/accounts/activate/?token={activation_token.token}"
 
         await email_sender.send_activation_email(new_user.email, activation_link)
 
