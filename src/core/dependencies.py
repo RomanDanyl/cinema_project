@@ -15,8 +15,11 @@ def get_settings() -> BaseAppSettings:
     return Settings()
 
 
+SettingsDep = Annotated[BaseAppSettings, Depends(get_settings)]
+
+
 def get_accounts_email_notificator(
-    settings: Settings = Depends(get_settings)
+    settings: SettingsDep
 ) -> EmailSenderInterface:
     """
     Retrieve an instance of the EmailSenderInterface configured with the application settings.
