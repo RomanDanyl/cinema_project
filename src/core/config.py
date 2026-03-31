@@ -24,7 +24,7 @@ class Settings(BaseAppSettings):
     POSTGRES_USER: str = "test_user"
     POSTGRES_PASSWORD: str = "<PASSWORD>"
     POSTGRES_HOST: str = "127.0.0.1"
-    POSTGRES_DB_PORT: int = 5555
+    POSTGRES_DB_PORT: int = 5435
     POSTGRES_DB: str = "test_db"
 
     @property
@@ -41,7 +41,7 @@ class Settings(BaseAppSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_DB_PORT}/{self.POSTGRES_DB}"
         )
 
-    model_config = SettingsConfigDict(env_file=".env.local")
+    model_config = SettingsConfigDict(env_file=".env")
 
 
 class TestingSettings(BaseAppSettings):
