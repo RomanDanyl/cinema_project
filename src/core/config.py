@@ -10,6 +10,7 @@ class BaseAppSettings(BaseSettings):
 
     PATH_TO_EMAIL_TEMPLATES_DIR: str = str(BASE_DIR / "notifications" / "templates")
     ACTIVATION_EMAIL_TEMPLATE_NAME: str = "activation_request.html"
+    ACTIVATION_COMPLETE_EMAIL_TEMPLATE_NAME: str = "activation_complete.html"
 
     EMAIL_HOST: str = "127.0.0.1"
     EMAIL_PORT: int = 1025
