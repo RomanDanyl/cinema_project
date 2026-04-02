@@ -20,6 +20,7 @@ class EmailSender(EmailSenderInterface):
         use_tls: bool,
         template_dir: str,
         activation_email_template_name: str,
+        activation_complete_email_template_name: str
     ):
         self._hostname = hostname
         self._port = port
@@ -27,6 +28,7 @@ class EmailSender(EmailSenderInterface):
         self._password = password
         self._use_tls = use_tls
         self._activation_email_template_name = activation_email_template_name
+        self._activation_complete_email_template_name = activation_complete_email_template_name
 
         self._env = Environment(loader=FileSystemLoader(template_dir))
 
@@ -75,4 +77,17 @@ class EmailSender(EmailSenderInterface):
         template = self._env.get_template(self._activation_email_template_name)
         html_content = template.render(email=email, activation_link=activation_link)
         subject = "Account Activation"
+        await self._send_email(email, subject, html_content)
+
+    async def send_activation_complete_email(self, email: str, login_link: str) -> None:
+        """
+        Send an account activation completion email asynchronously.
+
+        Args:
+            email (str): The recipient's email address.
+            login_link (str): The login link to be included in the email.
+        """
+        template = self._env.get_template(self._activation_complete_email_template_name)
+        html_content = template.render(email=email, login_link=login_link)
+        subject = "Account Activated Successfully"
         await self._send_email(email, subject, html_content)
