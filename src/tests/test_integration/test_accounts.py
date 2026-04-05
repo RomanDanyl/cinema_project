@@ -2,8 +2,9 @@ from datetime import timezone, datetime
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 
 from src.auth.models import UserModel, ActivationTokenModel
 
@@ -135,3 +136,57 @@ async def test_register_user_internal_server_error(client):
         response_data = response.json()
         expected_message = "An error occurred during user creation."
         assert response_data["detail"] == expected_message, f"Expected error message: {expected_message}"
+
+
+@pytest.mark.asyncio
+async def test_activate_account_success(client, db_session):
+    """
+    Test successful activation of a user account.
+
+    Steps:
+    - Register a new user.
+    - Verify the user is inactive.
+    - Activate the user using the activation token.
+    - Verify the user is activated and the token is deleted.
+    """
+    registration_payload = {
+        "email": "testuser@example.com",
+        "password": "StrongPassword123!"
+    }
+
+    registration_response = await client.post("/api/v1/accounts/register/", json=registration_payload)
+    assert registration_response.status_code == 201, "Expected status code 201 for successful registration."
+
+    stmt = (
+        select(UserModel)
+        .options(joinedload(UserModel.activation_token))
+        .where(UserModel.email == registration_payload["email"])
+    )
+    result = await db_session.execute(stmt)
+    user = result.scalars().first()
+    assert user is not None, "User was not created in the database."
+    assert not user.is_active, "Newly registered user should not be active."
+
+    assert user.activation_token is not None and user.activation_token.token is not None, \
+        "Activation token was not created in the database."
+
+    activation_token = user.activation_token.token
+
+    activation_response = await client.get(f"/api/v1/accounts/activate/?token={activation_token}")
+    assert activation_response.status_code == 200, "Expected status code 200 for successful activation."
+    assert activation_response.json()["message"] == "User account activated successfully."
+
+    stmt = (
+        select(UserModel)
+        .options(joinedload(UserModel.activation_token))
+        .where(UserModel.email == registration_payload["email"])
+    )
+    result = await db_session.execute(stmt)
+    user = result.scalars().first()
+    await db_session.refresh(user)
+    assert user.is_active, "User should be active after successful activation."
+
+    stmt = select(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
+    result = await db_session.execute(stmt)
+    token = result.scalars().first()
+    assert token is None, "Activation token should be deleted after successful activation."
