@@ -5,10 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.orm import joinedload
 
+from src.auth.models import UserModel, ActivationTokenModel
+from src.database.session_postgresql import PostgresSessionDep
 from src.exceptions import BaseEmailError
 from src.core.dependencies import EmailSenderDep, SettingsDep
-from src.database.models import UserModel, ActivationTokenModel
-from src.database import SessionDep
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema, MessageResponseSchema
 
 router = APIRouter(prefix="/accounts")
@@ -43,7 +43,7 @@ router = APIRouter(prefix="/accounts")
 )
 async def register_user(
     user_data: UserRegistrationRequestSchema,
-    db: SessionDep,
+    db: PostgresSessionDep,
     email_sender: EmailSenderDep,
     settings: SettingsDep,
     background_tasks: BackgroundTasks
@@ -114,7 +114,7 @@ async def register_user(
     },
 )
 async def activate_account(
-    db: SessionDep,
+    db: PostgresSessionDep,
     email_sender: EmailSenderDep,
     background_tasks: BackgroundTasks,
     settings: SettingsDep,

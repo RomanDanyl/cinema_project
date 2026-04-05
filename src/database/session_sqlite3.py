@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Annotated
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from src.core.dependencies import get_settings
-from src.database.models.base import Base
+from src.database.base import Base
 
 settings = get_settings()
 
@@ -59,3 +60,5 @@ async def reset_sqlite_database() -> None:
     async with sqlite_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+
+SqliteSessionDep = Annotated[AsyncSession, Depends(get_sqlite_db)]

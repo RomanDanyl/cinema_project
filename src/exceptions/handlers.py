@@ -8,7 +8,7 @@ async def password_error_handler(request: Request, exc: PasswordStrengthError) -
     Transforms model validation errors into standard FastAPI 422 responses.
     """
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
             "detail": [
                 {
