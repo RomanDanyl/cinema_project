@@ -278,3 +278,43 @@ async def test_activate_user_with_deleted_token(client, db_session):
     assert activation_response.json()["detail"] == "Invalid or expired activation token.", (
         "Expected error message for deleted token."
     )
+
+
+@pytest.mark.asyncio
+async def test_activate_already_active_user(client, db_session):
+    """
+    Test activation of an already active user.
+
+    Ensures that the endpoint returns a 400 error if the user is already active.
+    Steps:
+    - Register a new user.
+    - Mark the user as active in the database.
+    - Attempt to activate the user using the activation token.
+    - Verify that a 400 error with the expected error message is returned.
+    """
+    registration_payload = {
+        "email": "testuser@example.com",
+        "password": "StrongPassword123!"
+    }
+
+    registration_response = await client.post("/api/v1/accounts/register/", json=registration_payload)
+    assert registration_response.status_code == 201, "Expected status code 201 for successful registration."
+
+    stmt = select(UserModel).where(UserModel.email == registration_payload["email"])
+    result = await db_session.execute(stmt)
+    user = result.scalars().first()
+    assert user is not None, "User should exist in the database."
+
+    user.is_active = True
+    await db_session.commit()
+
+    stmt_token = select(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
+    result_token = await db_session.execute(stmt_token)
+    activation_token = result_token.scalars().first()
+    assert activation_token is not None, "Activation token should exist for the user."
+
+    activation_response = await client.get(f"/api/v1/accounts/activate/?token={activation_token.token}")
+    assert activation_response.status_code == 400, "Expected status code 400 for already active user."
+    assert activation_response.json()["detail"] == "User account is already active.", (
+        "Expected error message for already active user."
+    )
