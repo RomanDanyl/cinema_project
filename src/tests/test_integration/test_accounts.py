@@ -1,4 +1,4 @@
-from datetime import timezone, datetime
+from datetime import timezone, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -190,3 +190,45 @@ async def test_activate_account_success(client, db_session):
     result = await db_session.execute(stmt)
     token = result.scalars().first()
     assert token is None, "Activation token should be deleted after successful activation."
+
+
+@pytest.mark.asyncio
+async def test_activate_user_with_expired_token(client, db_session):
+    """
+    Test activation with an expired token.
+
+    Ensures that the endpoint returns a 400 error when the activation token is expired.
+    Steps:
+    - Register a new user.
+    - Retrieve the user and their activation token.
+    - Manually set the token's expiration to a past date.
+    - Attempt to activate the account with the expired token.
+    - Verify that the response is a 400 error with the expected error message.
+    """
+    registration_payload = {
+        "email": "testuser@example.com",
+        "password": "StrongPassword123!"
+    }
+    registration_response = await client.post("/api/v1/accounts/register/", json=registration_payload)
+    assert registration_response.status_code == 201, "Expected status code 201 for successful registration."
+
+    stmt = select(UserModel).where(UserModel.email == registration_payload["email"])
+    result = await db_session.execute(stmt)
+    user = result.scalars().first()
+    assert user is not None, "User should exist in the database."
+    assert not user.is_active, "User should not be active before activation."
+
+    stmt_token = select(ActivationTokenModel).where(ActivationTokenModel.user_id == user.id)
+    result_token = await db_session.execute(stmt_token)
+    activation_token = result_token.scalars().first()
+    assert activation_token is not None, "Activation token should exist for the user."
+
+    activation_token.expires_at = datetime.now(timezone.utc) - timedelta(days=2)
+    await db_session.commit()
+
+    activation_response = await client.get(f"/api/v1/accounts/activate/?token={activation_token.token}")
+
+    assert activation_response.status_code == 400, "Expected status code 400 for expired token."
+    assert activation_response.json()["detail"] == "Invalid or expired activation token.", (
+        "Expected error message for expired token."
+    )
