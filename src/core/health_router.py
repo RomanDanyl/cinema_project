@@ -3,7 +3,7 @@ from fastapi import APIRouter, status
 from sqlalchemy import text
 from typing import Dict, Any
 
-from src.database import SessionDep
+from src.database.session_postgresql import PostgresSessionDep
 from src.core.dependencies import SettingsDep
 
 router = APIRouter(prefix="/health", tags=["system"])
@@ -22,7 +22,7 @@ async def check_mailhog(settings) -> str:
 
 @router.get("/", status_code=status.HTTP_200_OK)
 async def health_check(
-    db: SessionDep,
+    db: PostgresSessionDep,
     settings: SettingsDep
 ) -> Dict[str, Any]:
     """

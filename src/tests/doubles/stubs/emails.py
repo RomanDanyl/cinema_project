@@ -12,3 +12,13 @@ class StubEmailSender(EmailSenderInterface):
             activation_link (str): The activation link to include in the email.
         """
         return None
+
+    async def send_activation_complete_email(self, email: str, login_link: str) -> None:
+        """
+        Stub implementation for sending an account activation complete email.
+
+        Args:
+            email (str): The recipient's email address.
+            login_link (str): The login link to include in the email.
+        """
+        return None

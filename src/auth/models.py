@@ -5,9 +5,9 @@ from sqlalchemy import String, DateTime, func, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, validates, relationship
 
 from src.security.utils import generate_secure_token
-from src.database.models import validators
+
 from src.security.passwords import hash_password, verify_password
-from src.database.models.base import Base
+from src.database.base import Base
 
 
 class UserModel(Base):
@@ -60,6 +60,7 @@ class UserModel(Base):
         """
         Set the user's password after validating its strength and hashing it.
         """
+        from src.database.models import validators
         validators.validate_password_strength(raw_password)
         self._hashed_password = hash_password(raw_password)
 
@@ -71,6 +72,7 @@ class UserModel(Base):
 
     @validates("email")
     def validate_email(self, key, value) -> str:
+        from src.database.models import validators
         return validators.validate_email(value.lower())
 
 

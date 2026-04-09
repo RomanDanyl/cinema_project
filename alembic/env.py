@@ -5,7 +5,8 @@ from sqlalchemy import pool
 
 from alembic import context
 
-from src.database.models.base import Base
+from src.database.base import Base
+from src.auth.models import UserModel, ActivationTokenModel
 from src.core.dependencies import get_settings
 
 settings = get_settings()

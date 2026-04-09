@@ -1,11 +1,15 @@
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
+from src.auth.models import UserModel
 from src.core.config import TestingSettings
 from src.main import app
 from src.core.dependencies import get_settings, get_accounts_email_notificator
-from src.database import reset_database, get_db_contextmanager
+from src.database.session_sqlite3 import reset_sqlite_database as reset_database
+from src.database.session_sqlite3 import get_sqlite_db_contextmanager as get_db_contextmanager
 from src.tests.doubles.stubs.emails import StubEmailSender
 
 
@@ -120,3 +124,19 @@ async def e2e_db_session():
     """
     async with get_db_contextmanager() as session:
         yield session
+
+
+@pytest_asyncio.fixture(scope="function")
+async def inactive_user(client, db_session):
+    """Fixture that registers a user and returns their data and activation token."""
+    payload = {"email": "testuser@example.com", "password": "StrongPassword123!"}
+    await client.post("/api/v1/accounts/register/", json=payload)
+
+    stmt = (
+        select(UserModel)
+        .options(joinedload(UserModel.activation_token))
+        .where(UserModel.email == payload["email"])
+    )
+    result = await db_session.execute(stmt)
+    user = result.scalars().first()
+    return user
