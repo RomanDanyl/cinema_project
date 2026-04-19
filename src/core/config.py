@@ -18,6 +18,10 @@ class BaseAppSettings(BaseSettings):
     EMAIL_USE_TLS: bool = False
     MAILHOG_API_PORT: int = 8025
 
+    SECRET_KEY_ACCESS: str
+    SECRET_KEY_REFRESH: str
+    JWT_SIGNING_ALGORITHM: str = "HS256"
+
 
 class Settings(BaseAppSettings):
     POSTGRES_USER: str = "test_user"
@@ -44,6 +48,8 @@ class Settings(BaseAppSettings):
 
 
 class TestingSettings(BaseAppSettings):
+    SECRET_KEY_ACCESS: str = "test_key"
+    SECRET_KEY_REFRESH: str = "test_key"
 
     @property
     def database_url_async(self) -> str:
