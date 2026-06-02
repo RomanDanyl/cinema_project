@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from security.token_manager import JWTAuthManager
+from src.security.token_manager import JWTAuthManager
 from src.security.interfaces import JWTAuthManagerInterface
 from src.notifications.interfaces import EmailSenderInterface
 from src.notifications.emails import EmailSender
