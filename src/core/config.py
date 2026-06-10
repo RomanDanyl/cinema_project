@@ -22,6 +22,8 @@ class BaseAppSettings(BaseSettings):
     SECRET_KEY_REFRESH: str
     JWT_SIGNING_ALGORITHM: str = "HS256"
 
+    LOGIN_TIME_DAYS: int = 7
+
 
 class Settings(BaseAppSettings):
     POSTGRES_USER: str = "test_user"
