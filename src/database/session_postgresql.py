@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Annotated
+
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -38,3 +40,6 @@ async def get_postgresql_db_contextmanager() -> AsyncGenerator[AsyncSession, Non
     """
     async with AsyncSessionLocal() as session:
         yield session
+
+
+PostgresSessionDep = Annotated[AsyncSession, Depends(get_postgresql_db)]

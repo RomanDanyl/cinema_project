@@ -1,6 +1,8 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr
 
-from src.database.models.validators import validate_password_strength
+
+class MessageResponseSchema(BaseModel):
+    message: str
 
 
 class BaseEmailPasswordSchema(BaseModel):

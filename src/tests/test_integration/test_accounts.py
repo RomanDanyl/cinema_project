@@ -1,9 +1,10 @@
-from datetime import timezone, datetime
+from datetime import timezone, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 
 from src.auth.models import UserModel, ActivationTokenModel
 
@@ -135,3 +136,111 @@ async def test_register_user_internal_server_error(client):
         response_data = response.json()
         expected_message = "An error occurred during user creation."
         assert response_data["detail"] == expected_message, f"Expected error message: {expected_message}"
+
+
+@pytest.mark.asyncio
+async def test_activate_account_success(client, db_session, inactive_user):
+    """
+    Test successful activation of a user account.
+
+    Steps:
+    - Register a new user.
+    - Verify the user is inactive.
+    - Activate the user using the activation token.
+    - Verify the user is activated and the token is deleted.
+    """
+    token = inactive_user.activation_token.token
+    response = await client.get(f"/api/v1/accounts/activate/?token={token}")
+
+    assert response.status_code == 200
+
+    await db_session.refresh(inactive_user)
+    assert inactive_user.is_active is True
+
+    stmt = select(ActivationTokenModel).where(ActivationTokenModel.user_id == inactive_user.id)
+    result = await db_session.execute(stmt)
+    assert result.scalars().first() is None
+
+
+@pytest.mark.asyncio
+async def test_activate_user_with_expired_token(client, db_session, inactive_user):
+    """
+    Test activation with an expired token.
+
+    Ensures that the endpoint returns a 400 error when the activation token is expired.
+    Steps:
+    - Register a new user.
+    - Retrieve the user and their activation token.
+    - Manually set the token's expiration to a past date.
+    - Attempt to activate the account with the expired token.
+    - Verify that the response is a 400 error with the expected error message.
+    """
+
+    activation_token = inactive_user.activation_token
+
+    activation_token.expires_at = datetime.now(timezone.utc) - timedelta(days=2)
+    await db_session.commit()
+
+    activation_response = await client.get(f"/api/v1/accounts/activate/?token={activation_token.token}")
+
+    assert activation_response.status_code == 400, "Expected status code 400 for expired token."
+    assert activation_response.json()["detail"] == "Invalid or expired activation token.", (
+        "Expected error message for expired token."
+    )
+
+
+@pytest.mark.asyncio
+async def test_activate_user_with_deleted_token(client, db_session, inactive_user):
+    """
+    Test activation with a deleted token.
+
+    Ensures that the endpoint returns a 400 error when the activation token has been deleted.
+
+    Steps:
+    - Register a new user.
+    - Verify that the user is created and inactive.
+    - Delete the activation token from the database.
+    - Attempt to activate the account using the deleted token.
+    - Verify that a 400 error is returned with the appropriate error message.
+    """
+
+    activation_token = inactive_user.activation_token
+
+    await db_session.execute(
+        delete(ActivationTokenModel).where(ActivationTokenModel.id == activation_token.id)
+    )
+    await db_session.commit()
+
+    activation_response = await client.get(f"/api/v1/accounts/activate/?token={activation_token.token}")
+    assert activation_response.status_code == 400, "Expected status code 400 for deleted token."
+    assert activation_response.json()["detail"] == "Invalid or expired activation token.", (
+        "Expected error message for deleted token."
+    )
+
+
+@pytest.mark.asyncio
+async def test_activate_already_active_user(client, db_session, inactive_user):
+    """
+    Test activation of an already active user.
+
+    Ensures that the endpoint returns a 400 error if the user is already active.
+    Steps:
+    - Register a new user.
+    - Mark the user as active in the database.
+    - Attempt to activate the user using the activation token.
+    - Verify that a 400 error with the expected error message is returned.
+    """
+
+    inactive_user.is_active = True
+    await db_session.commit()
+
+    stmt_token = select(ActivationTokenModel).where(ActivationTokenModel.user_id == inactive_user.id)
+    result_token = await db_session.execute(stmt_token)
+    activation_token = result_token.scalars().first()
+    assert activation_token is not None, "Activation token should exist for the user."
+
+    activation_response = await client.get(f"/api/v1/accounts/activate/?token={activation_token.token}")
+    assert activation_response.status_code == 400, "Expected status code 400 for already active user."
+    assert activation_response.json()["detail"] == "User account is already active.", (
+        "Expected error message for already active user."
+    )

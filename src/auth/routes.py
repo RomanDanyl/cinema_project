@@ -1,13 +1,16 @@
-from fastapi import APIRouter, status, HTTPException, BackgroundTasks
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, status, HTTPException, BackgroundTasks, Query
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.orm import joinedload
 
+from src.database.session_postgresql import PostgresSessionDep
 from src.exceptions import BaseEmailError
 from src.core.dependencies import EmailSenderDep, SettingsDep, TokenManagerDep
 from src.database.models import UserModel, ActivationTokenModel, RefreshTokenModel
-from src.database import SessionDep
 from src.auth.schemas import UserRegistrationResponseSchema, UserRegistrationRequestSchema, UserLoginResponseSchema, \
-    UserLoginRequestSchema
+    UserLoginRequestSchema, MessageResponseSchema
 
 router = APIRouter(prefix="/accounts")
 
@@ -41,7 +44,7 @@ router = APIRouter(prefix="/accounts")
 )
 async def register_user(
     user_data: UserRegistrationRequestSchema,
-    db: SessionDep,
+    db: PostgresSessionDep,
     email_sender: EmailSenderDep,
     settings: SettingsDep,
     background_tasks: BackgroundTasks
@@ -84,6 +87,109 @@ async def register_user(
     return UserRegistrationResponseSchema.model_validate(new_user)
 
 
+@router.get(
+    "/activate/",
+    response_model=MessageResponseSchema,
+    summary="Activate User Account",
+    description="Activate a user's account using their activation token.",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {
+            "description": "Bad Request - The activation token is invalid or expired, "
+            "or the user account is already active.",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_token": {
+                            "summary": "Invalid Token",
+                            "value": {"detail": "Invalid or expired activation token."},
+                        },
+                        "already_active": {
+                            "summary": "Account Already Active",
+                            "value": {"detail": "User account is already active."},
+                        },
+                    }
+                }
+            },
+        },
+    },
+)
+async def activate_account(
+    db: PostgresSessionDep,
+    email_sender: EmailSenderDep,
+    background_tasks: BackgroundTasks,
+    settings: SettingsDep,
+    token: str = Query(..., description="The activation token from the email"),
+) -> MessageResponseSchema:
+    """
+        Endpoint to activate a user's account.
+
+        This endpoint verifies the activation token for a user by checking that the token record exists
+        and that it has not expired, then sends a confirmation email as a background task upon
+        successful activation If the token is valid and the user's account is not already active,
+        the user's account is activated and the activation token is deleted. If the token is invalid, expired,
+        or if the account is already active, an HTTP 400 error is raised.
+
+        Args:
+            token: Contains the user's token.
+            db (AsyncSession): The asynchronous database session.
+            email_sender (EmailSenderInterface): The asynchronous email sender.
+            background_tasks(BackgroundTasks): FastAPI manager for non-blocking post-response tasks.
+            settings (SettingsDep): The FastAPI settings object.
+
+        Returns:
+            MessageResponseSchema: A response message confirming successful activation.
+
+        Raises:
+            HTTPException:
+                - 400 Bad Request if the activation token is invalid or expired.
+                - 400 Bad Request if the user account is already active.
+    """
+    stmt = (
+        select(ActivationTokenModel)
+        .options(joinedload(ActivationTokenModel.user))
+        .where(ActivationTokenModel.token == token)
+    )
+    result = await db.execute(stmt)
+    token_record = result.unique().scalar_one_or_none()
+
+    now_utc = datetime.now(timezone.utc)
+
+    if not token_record or token_record.expires_at.replace(tzinfo=timezone.utc) < now_utc:
+        if token_record:
+            await db.delete(token_record)
+            await db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired activation token.",
+        )
+
+    user = token_record.user
+
+    if user.is_active:
+        await db.delete(token_record)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User account is already active."
+        )
+
+    user.is_active = True
+    await db.delete(token_record)
+    await db.commit()
+
+    base = settings.BASE_URL.rstrip("/")
+    login_link = f"{base}/api/v1/accounts/login/"
+    background_tasks.add_task(
+        email_sender.send_activation_complete_email,
+        user.email,
+        login_link
+    )
+
+    return MessageResponseSchema(message=f"User account activated successfully.")
+
+
 @router.post(
     "/login/",
     response_model=UserLoginResponseSchema,
@@ -121,7 +227,7 @@ async def register_user(
 )
 async def login_user(
     login_data: UserLoginRequestSchema,
-    db: SessionDep,
+    db: PostgresSessionDep,
     settings: SettingsDep,
     jwt_manager: TokenManagerDep,
 ) -> UserLoginResponseSchema:
