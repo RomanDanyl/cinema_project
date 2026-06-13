@@ -3,8 +3,9 @@ import pytest
 from bs4 import BeautifulSoup
 from email_validator import validate_email, EmailNotValidError
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
-from src.auth.models import ActivationTokenModel, UserModel
+from src.auth.models import ActivationTokenModel, UserModel, RefreshTokenModel
 
 
 @pytest.mark.e2e
@@ -142,3 +143,48 @@ async def test_account_activation(e2e_client, settings, e2e_db_session):
     assert link_element is not None, "Login link element with id 'link' not found!"
     login_url = link_element["href"]
     assert "api/v1/accounts/login/" in login_url, f"The URL '{login_url}' is not valid!"
+
+
+@pytest.mark.e2e
+@pytest.mark.order(3)
+@pytest.mark.asyncio
+async def test_user_login(e2e_client, e2e_db_session):
+    """
+    End-to-end test for user login (async version).
+
+    This test verifies the following:
+    1. A user can log in with valid credentials.
+    2. The API returns an access token and a refresh token.
+    3. The refresh token is stored in the database.
+
+    Steps:
+    - Send a POST request to the login endpoint with the user's credentials.
+    - Assert the response status code and verify the returned access and refresh tokens.
+    - Validate that the refresh token is stored in the database.
+    """
+    user_data = {
+        "email": "test@mate.com",
+        "password": "StrongPassword123!"
+    }
+
+    login_url = "/api/v1/accounts/login/"
+    response = await e2e_client.post(login_url, json=user_data)
+
+    assert response.status_code == 201, f"Expected status code 201, got {response.status_code}"
+    response_data = response.json()
+
+    assert "access_token" in response_data, "Access token is missing in the response!"
+    assert "refresh_token" in response_data, "Refresh token is missing in the response!"
+
+    refresh_token = response_data["refresh_token"]
+
+    stmt = (
+        select(RefreshTokenModel)
+        .options(joinedload(RefreshTokenModel.user))
+        .where(RefreshTokenModel.token == refresh_token)
+    )
+    result = await e2e_db_session.execute(stmt)
+    stored_token = result.scalars().first()
+
+    assert stored_token is not None, "Refresh token was not stored in the database!"
+    assert stored_token.user.email == user_data["email"], "Refresh token is linked to the wrong user!"
