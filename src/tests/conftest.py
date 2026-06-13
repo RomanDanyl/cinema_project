@@ -4,6 +4,8 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
+from src.security.interfaces import JWTAuthManagerInterface
+from src.security.token_manager import JWTAuthManager
 from src.auth.models import UserModel
 from src.core.config import TestingSettings
 from src.main import app
@@ -140,3 +142,24 @@ async def inactive_user(client, db_session):
     result = await db_session.execute(stmt)
     user = result.scalars().first()
     return user
+
+
+@pytest_asyncio.fixture(scope="function")
+async def jwt_manager() -> JWTAuthManagerInterface:
+    """
+    Asynchronous fixture to create a JWT authentication manager instance.
+
+    This fixture retrieves the application settings via `get_settings()` and uses them to
+    instantiate a `JWTAuthManager`. The manager is configured with the secret keys for
+    access and refresh tokens, as well as the JWT signing algorithm specified in the settings.
+
+    Returns:
+        JWTAuthManagerInterface: An instance of JWTAuthManager configured with the appropriate
+        secret keys and algorithm.
+    """
+    settings = get_settings()
+    return JWTAuthManager(
+        secret_key_access=settings.SECRET_KEY_ACCESS,
+        secret_key_refresh=settings.SECRET_KEY_REFRESH,
+        algorithm=settings.JWT_SIGNING_ALGORITHM
+    )
