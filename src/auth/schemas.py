@@ -21,3 +21,13 @@ class UserRegistrationResponseSchema(BaseModel):
     email: EmailStr
 
     model_config = {"from_attributes": True}
+
+
+class UserLoginRequestSchema(BaseEmailPasswordSchema):
+    pass
+
+
+class UserLoginResponseSchema(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"

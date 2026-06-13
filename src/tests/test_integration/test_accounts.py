@@ -4,9 +4,8 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy import select, delete
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import joinedload
 
-from src.auth.models import UserModel, ActivationTokenModel
+from src.auth.models import UserModel, ActivationTokenModel, RefreshTokenModel
 
 
 @pytest.mark.asyncio
@@ -243,4 +242,161 @@ async def test_activate_already_active_user(client, db_session, inactive_user):
     assert activation_response.status_code == 400, "Expected status code 400 for already active user."
     assert activation_response.json()["detail"] == "User account is already active.", (
         "Expected error message for already active user."
+    )
+
+
+@pytest.mark.asyncio
+async def test_login_user_success(client, db_session, jwt_manager):
+    """
+    Test successful login.
+
+    Validates that access and refresh tokens are returned, the refresh token is stored in the database,
+    and both tokens are valid.
+    """
+    user_payload = {
+        "email": "testuser@example.com",
+        "password": "StrongPassword123!"
+    }
+
+    user = UserModel.create(
+        email=user_payload["email"],
+        raw_password=user_payload["password"],
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+
+    login_payload = {
+        "email": user_payload["email"],
+        "password": user_payload["password"]
+    }
+    response = await client.post("/api/v1/accounts/login/", json=login_payload)
+    assert response.status_code == 201, "Expected status code 201 for successful login."
+    response_data = response.json()
+    assert "access_token" in response_data, "Access token is missing in the response."
+    assert "refresh_token" in response_data, "Refresh token is missing in the response."
+    assert response_data["access_token"], "Access token is empty."
+    assert response_data["refresh_token"], "Refresh token is empty."
+
+    access_token_data = jwt_manager.decode_access_token(response_data["access_token"])
+    assert access_token_data["user_id"] == user.id, "Access token does not contain correct user ID."
+
+    refresh_token_data = jwt_manager.decode_refresh_token(response_data["refresh_token"])
+    assert refresh_token_data["user_id"] == user.id, "Refresh token does not contain correct user ID."
+
+    stmt_refresh = select(RefreshTokenModel).where(RefreshTokenModel.user_id == user.id)
+    result_refresh = await db_session.execute(stmt_refresh)
+    refresh_token_record = result_refresh.scalars().first()
+    assert refresh_token_record is not None, "Refresh token was not stored in the database."
+    assert refresh_token_record.token == response_data["refresh_token"], "Stored refresh token does not match."
+
+    expires_at = refresh_token_record.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    assert expires_at > datetime.now(timezone.utc), "Refresh token is already expired."
+
+
+@pytest.mark.asyncio
+async def test_login_user_invalid_cases(client, db_session):
+    """
+    Test login with invalid cases:
+    1. Non-existent user.
+    2. Incorrect password for an existing user.
+    """
+    login_payload = {
+        "email": "nonexistent@example.com",
+        "password": "SomePassword123!"
+    }
+    response = await client.post("/api/v1/accounts/login/", json=login_payload)
+    assert response.status_code == 401, "Expected status code 401 for non-existent user."
+    assert response.json()["detail"] == "Invalid email or password.", \
+        "Unexpected error message for non-existent user."
+
+    user_payload = {
+        "email": "testuser@example.com",
+        "password": "CorrectPassword123!"
+    }
+
+    user = UserModel.create(
+        email=user_payload["email"],
+        raw_password=user_payload["password"],
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+
+    login_payload_incorrect_password = {
+        "email": user_payload["email"],
+        "password": "WrongPassword123!"
+    }
+    response = await client.post("/api/v1/accounts/login/", json=login_payload_incorrect_password)
+    assert response.status_code == 401, "Expected status code 401 for incorrect password."
+    assert response.json()["detail"] == "Invalid email or password.", \
+        "Unexpected error message for incorrect password."
+
+
+@pytest.mark.asyncio
+async def test_login_user_inactive_account(client, db_session,):
+    """
+    Test login with an inactive user account.
+
+    Validates that the endpoint returns a 403 status code and an appropriate error message
+    when attempting to log in with a user whose account is not activated.
+    """
+    user_payload = {
+        "email": "inactiveuser@example.com",
+        "password": "StrongPassword123!"
+    }
+
+    user = UserModel.create(
+        email=user_payload["email"],
+        raw_password=user_payload["password"],
+    )
+    user.is_active = False
+    db_session.add(user)
+    await db_session.commit()
+
+    login_payload = {
+        "email": user_payload["email"],
+        "password": user_payload["password"]
+    }
+    response = await client.post("/api/v1/accounts/login/", json=login_payload)
+
+    assert response.status_code == 403, "Expected status code 403 for inactive user."
+    assert response.json()["detail"] == "User account is not activated.", \
+        "Unexpected error message for inactive user."
+
+
+@pytest.mark.asyncio
+async def test_login_user_commit_error(client, db_session):
+    """
+    Test login when a database commit error occurs.
+
+    Validates that the endpoint returns a 500 status code and an appropriate error message.
+    """
+    user_payload = {
+        "email": "testuser@example.com",
+        "password": "StrongPassword123!"
+    }
+
+    user = UserModel.create(
+        email=user_payload["email"],
+        raw_password=user_payload["password"],
+    )
+    user.is_active = True
+    db_session.add(user)
+    await db_session.commit()
+
+    login_payload = {
+        "email": user_payload["email"],
+        "password": user_payload["password"]
+    }
+
+    with patch("sqlalchemy.ext.asyncio.session.AsyncSession.commit", side_effect=SQLAlchemyError):
+        response = await client.post("/api/v1/accounts/login/", json=login_payload)
+
+    assert response.status_code == 500, "Expected status code 500 for database commit error."
+    assert response.json()["detail"] == "An error occurred while processing the request.", (
+        "Unexpected error message for database commit error."
     )
